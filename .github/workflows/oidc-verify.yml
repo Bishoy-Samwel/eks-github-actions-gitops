@@ -1,0 +1,26 @@
+name: oidc-verify
+
+# Temporary step-1 verification. Proves the trust boundary:
+#   - on main          -> assume succeeds
+#   - on any other ref -> assume fails with Not authorized
+# Delete this file once verified.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  assume-ci-ecr-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::042617239394:role/myapp-ci-ecr-push
+          aws-region: eu-central-1
+
+      - name: Who am I
+        run: aws sts get-caller-identity
