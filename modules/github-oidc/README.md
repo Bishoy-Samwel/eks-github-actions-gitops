@@ -8,6 +8,7 @@ module "github_oidc" {
   source = "../../../modules/github-oidc"
 
   repo              = "ORG/REPO"
+  repo_subject      = "ORG@OWNER_ID/REPO@REPO_ID"   # see "The sub condition" below
   state_bucket_arn  = "arn:aws:s3:::myapp-tfstate-<account-id>"
   ecr_repository_arn = ""   # set once ECR exists
 }
@@ -46,14 +47,31 @@ Every role's trust policy requires *both* claims:
 
 | Context | `sub` |
 | --- | --- |
-| Push to a branch | `repo:ORG/REPO:ref:refs/heads/main` |
-| Any branch, any workflow | `repo:ORG/REPO:*` |
-| A job using `environment: production` | `repo:ORG/REPO:environment:production` |
-| A pull request | `repo:ORG/REPO:pull_request` |
-| A fork pull request | `repo:CONTRIB/REPO:pull_request` |
+| Push to a branch | `repo:ORG@OWNER_ID/REPO@REPO_ID:ref:refs/heads/main` |
+| Any branch, any workflow | `repo:ORG@OWNER_ID/REPO@REPO_ID:*` |
+| A job using `environment: production` | `repo:ORG@OWNER_ID/REPO@REPO_ID:environment:production` |
+| A pull request | `repo:ORG@OWNER_ID/REPO@REPO_ID:pull_request` |
+| A fork pull request | `repo:CONTRIB@ID/REPO@ID:pull_request` |
 
-`repo:ORG/REPO:*` — what most tutorials show — lets *any* branch and *any workflow you add
-later* assume the role. That is the mistake this module exists to avoid.
+**The `@ID` parts are not optional.** GitHub now appends immutable numeric IDs to the owner
+and repository in the subject. A trust policy written against the old name-only form
+(`repo:ORG/REPO:...`) will *never match* and every assume call fails with
+`Not authorized to perform sts:AssumeRoleWithWebIdentity` — even though the policy looks
+correct. This module is the first place that shows up.
+
+Get the IDs and pass them as `repo_subject`:
+
+```bash
+gh api repos/ORG/REPO --jq '{owner_id:.owner.id, repo_id:.id}'
+# repo_subject = "ORG@<owner_id>/REPO@<repo_id>"
+```
+
+Trusting the IDs is also the safer choice: a repository can be renamed, or deleted and its
+name reused by someone else, but its ID cannot. The name-only form could be re-pointed at a
+different repository; the ID form cannot.
+
+`repo:ORG@ID/REPO@ID:*` — what most tutorials show without the IDs — lets *any* branch and
+*any workflow you add later* assume the role. That is the mistake this module exists to avoid.
 
 The fork case matters for `infra-plan`: a fork PR carries the *contributor's* `ORG/REPO`,
 not yours, so it can never match your `pull_request` condition.
@@ -79,6 +97,7 @@ the ARN and re-apply once ECR exists to grant the push actions.
 | Name | Default | Description |
 | --- | --- | --- |
 | `repo` | — | `ORG/REPO` whose workflows may assume the roles |
+| `repo_subject` | `""` | Subject form incl. immutable IDs (`ORG@ID/REPO@ID`); empty falls back to `repo` |
 | `name_prefix` | `myapp` | Prefix for role and policy names |
 | `create_oidc_provider` | `true` | Create the provider, or look up the existing one |
 | `main_branch` | `main` | Branch trusted for push workflows |
@@ -118,6 +137,10 @@ Until that second case fails, the trust boundary is unproven.
 
 ## Gotchas
 
+- **`Not authorized` on `main` usually means a `<sub>` mismatch.** Check the real claim
+  GitHub issued (the token is in `ACTIONS_ID_TOKEN_REQUEST_URL` during a run) before
+  touching anything else. The most common cause is a trust policy without the immutable
+  `@ID` suffixes — see "The `sub` condition" above.
 - **`environment:` must be declared** in the apply job or its `sub` will not match
   `environment:production` and the assume call fails.
 - **Thumbprint.** AWS now manages the GitHub thumbprint; the value here is the historical

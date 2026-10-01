@@ -16,6 +16,16 @@ variable "github_repo" {
   default     = "Bishoy-Samwel/eks-github-actions-gitops"
 }
 
+variable "github_repo_subject" {
+  description = <<-EOT
+    Repository portion of the OIDC `sub`, with GitHub's immutable numeric IDs:
+    `OWNER@OWNER_ID/REPO@REPO_ID`. Get the IDs from
+    `gh api repos/OWNER/REPO --jq '{owner_id:.owner.id, repo_id:.id}'`.
+  EOT
+  type        = string
+  default     = "Bishoy-Samwel@29541335/eks-github-actions-gitops@1399970615"
+}
+
 variable "main_branch" {
   description = "Branch that trusted push workflows run on."
   type        = string

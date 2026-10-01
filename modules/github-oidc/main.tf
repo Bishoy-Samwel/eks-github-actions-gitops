@@ -25,6 +25,10 @@ data "aws_iam_openid_connect_provider" "github" {
 locals {
   oidc_provider_arn = var.create_oidc_provider ? aws_iam_openid_connect_provider.github[0].arn : data.aws_iam_openid_connect_provider.github[0].arn
 
+  // What the token's `sub` carries between `repo:` and the context suffix. Normally the
+  // immutable OWNER@ID/REPO@ID form, which is what GitHub issues now.
+  repo_subject = var.repo_subject != "" ? var.repo_subject : var.repo
+
   // Every trust policy starts from this and adds a `sub` restriction. The audience check
   // is not optional: without it a token minted for any other audience would be accepted.
   trust_conditions = {
@@ -49,7 +53,7 @@ resource "aws_iam_role" "ci_ecr_push" {
         // Only a push to main. A feature branch, a PR, or a workflow added later cannot
         // assume this. This one line is the security model.
         StringLike = {
-          "token.actions.githubusercontent.com:sub" = "repo:${var.repo}:ref:refs/heads/${var.main_branch}"
+          "token.actions.githubusercontent.com:sub" = "repo:${local.repo_subject}:ref:refs/heads/${var.main_branch}"
         }
       })
     }]
@@ -114,7 +118,7 @@ resource "aws_iam_role" "infra_plan" {
         // subject `repo:CONTRIB/REPO:pull_request`, so it does not match this — forks
         // cannot read this account's state.
         StringLike = {
-          "token.actions.githubusercontent.com:sub" = "repo:${var.repo}:pull_request"
+          "token.actions.githubusercontent.com:sub" = "repo:${local.repo_subject}:pull_request"
         }
       })
     }]
@@ -185,7 +189,7 @@ resource "aws_iam_role" "infra_apply" {
         // assume this; the job must explicitly declare `environment: <apply_environment>`,
         // which is where required reviewers / branch rules are enforced.
         StringLike = {
-          "token.actions.githubusercontent.com:sub" = "repo:${var.repo}:environment:${var.apply_environment}"
+          "token.actions.githubusercontent.com:sub" = "repo:${local.repo_subject}:environment:${var.apply_environment}"
         }
       })
     }]

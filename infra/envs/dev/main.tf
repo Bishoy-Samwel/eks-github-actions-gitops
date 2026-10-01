@@ -20,6 +20,7 @@ module "github_oidc" {
   source = "../../../modules/github-oidc"
 
   repo                 = var.github_repo
+  repo_subject         = var.github_repo_subject
   name_prefix          = var.name_prefix
   create_oidc_provider = var.create_oidc_provider
   main_branch          = var.main_branch

@@ -8,6 +8,23 @@ variable "repo" {
   }
 }
 
+variable "repo_subject" {
+  description = <<-EOT
+    Repository portion of the OIDC `sub` claim, without the leading `repo:` and without the
+    trailing `:ref:` / `:environment:` / `:pull_request` part.
+
+    GitHub now issues the subject with immutable numeric IDs attached:
+    `OWNER@OWNER_ID/REPO@REPO_ID`. That is what the token actually carries, and it is the
+    safer thing to trust: a repository can be renamed or deleted and its name reused, but
+    its ID cannot.
+
+    Leave empty to fall back to `var.repo` (the name-only form). That only matches tokens
+    issued before the immutable-subject change or by an account that opted out.
+  EOT
+  type        = string
+  default     = ""
+}
+
 variable "name_prefix" {
   description = "Prefix for every IAM role and policy this module creates."
   type        = string

@@ -107,6 +107,7 @@ it is reused by every workflow, and it is the thing most likely to be got wrong.
 ```hcl
 # modules/github-oidc/main.tf
 variable "repo" { type = string }   # "ORG/REPO"
+variable "repo_subject" { type = string }   # "ORG@OWNER_ID/REPO@REPO_ID" — what the token carries
 variable "branches" {
   type    = list(string)
   default = ["refs/heads/main"]
@@ -133,7 +134,7 @@ resource "aws_iam_role" "ci_ecr_push" {
         }
         # THIS ONE LINE IS THE ENTIRE SECURITY MODEL.
         StringLike = {
-          "token.actions.githubusercontent.com:sub" = "repo:${var.repo}:ref:refs/heads/main"
+          "token.actions.githubusercontent.com:sub" = "repo:${var.repo_subject}:ref:refs/heads/main"
         }
       }
     }]
@@ -169,23 +170,31 @@ takes these forms:
 
 | Context | `sub` value |
 | --- | --- |
-| Push to a branch | `repo:ORG/REPO:ref:refs/heads/main` |
-| Any branch, any workflow | `repo:ORG/REPO:*` |
-| A workflow using `environment: production` | `repo:ORG/REPO:environment:production` |
-| A fork pull request | `repo:CONTRIB/REPO:pull_request` |
+| Push to a branch | `repo:ORG@OWNER_ID/REPO@REPO_ID:ref:refs/heads/main` |
+| Any branch, any workflow | `repo:ORG@OWNER_ID/REPO@REPO_ID:*` |
+| A workflow using `environment: production` | `repo:ORG@OWNER_ID/REPO@REPO_ID:environment:production` |
+| A fork pull request | `repo:CONTRIB@ID/REPO@ID:pull_request` |
 
-So `repo:ORG/REPO:*` — which is what most tutorials show — means **any branch, in any
-workflow in that repo, plus any workflow you later add** can assume the role. Add a workflow
-with `pull_request_target` by accident and it inherits the role.
+**The `@ID` parts are always present.** GitHub appends the owner's and repository's immutable
+numeric IDs. A policy written as `repo:ORG/REPO:...` will never match and every assume fails
+with `Not authorized to perform sts:AssumeRoleWithWebIdentity` — while the policy looks
+perfectly correct. This is the first thing to check when that error appears. Fetch the IDs
+with `gh api repos/ORG/REPO --jq '{owner_id:.owner.id, repo_id:.id}'`. Trusting the IDs is
+also safer than trusting names, which can be renamed or reused after deletion.
+
+So `repo:ORG@ID/REPO@ID:*` — which is what most tutorials show (usually without the IDs) —
+means **any branch, in any workflow in that repo, plus any workflow you later add** can
+assume the role. Add a workflow with `pull_request_target` by accident and it inherits the
+role.
 
 Two safe patterns:
 
 ```hcl
 # narrow: one branch only
-"token.actions.githubusercontent.com:sub" = "repo:${var.repo}:ref:refs/heads/main"
+"token.actions.githubusercontent.com:sub" = "repo:ORG@OWNER_ID/REPO@REPO_ID:ref:refs/heads/main"
 
 # broader but still safe: any branch, but only workflows that declare the environment
-"token.actions.githubusercontent.com:sub" = "repo:${var.repo}:environment:production"
+"token.actions.githubusercontent.com:sub" = "repo:ORG@OWNER_ID/REPO@REPO_ID:environment:production"
 ```
 
 The second is safer than the first for multi-branch teams, because adding a workflow still
@@ -527,7 +536,7 @@ the node's IAM role, and that role may have far more permissions than you intend
 | Nodes `NotReady` | `AmazonEKS_CNI_Policy` not attached to the node role | Attach it, then recreate the node group |
 | Nodes `NotReady` | Subnet tagging for the CNI missing | Tag subnets `kubernetes.io/role/elb=1` and `kubernetes.io/role/internal-elb=1` |
 | `terraform init` says bucket does not exist | First apply not done yet | Apply `bootstrap/state` twice — you cannot write state to a bucket you have not created |
-| Workflow fails at `configure-aws-credentials` | `sub` does not match the actual context | Decode the token, compare `sub` to your trust policy. `environment:` and `ref:` produce different values |
+| Workflow fails at `configure-aws-credentials` | `sub` does not match the actual context | Decode the token, compare `sub` to your trust policy. Most often the policy omitted GitHub's immutable `@ID` suffixes; `environment:` and `ref:` also produce different values |
 | Workflow fails with thumbprint error | Stale thumbprint list | Re-fetch from `https://api.github.com/meta` or drop the list — AWS now root-CA based |
 | `kubectl` hangs in CI | Endpoint is private-only | Both flags must be true; add the runner CIDR to the cluster SG |
 | `kubectl` denied | No access entry | Add one for your principal |
