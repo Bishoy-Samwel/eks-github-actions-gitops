@@ -3,6 +3,10 @@
 Creates the S3 bucket and DynamoDB lock table that every other Terraform config in this
 repo stores its state in.
 
+New to this step? Read [`STATE-BACKEND.md`](STATE-BACKEND.md) first — it covers why the backend
+exists, what each resource protects against, and what breaks without it. This file is the
+runbook: the commands to execute and the output to expect.
+
 There is exactly one of these per AWS account. It is not per environment. Environments
 are separated by the `key` prefix inside the bucket instead, which keeps locking,
 versioning, encryption, and access control identical for all of them.

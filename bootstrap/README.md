@@ -168,7 +168,8 @@ terraform init -migrate-state   # move local state into the bucket
 terraform state list
 ```
 
-Then verify — the full list is in [`bootstrap/state/README.md`](state/README.md):
+Then verify — the full list is in [`bootstrap/state/README.md`](state/README.md), and the
+reasoning behind each resource is in [`bootstrap/state/STATE-BACKEND.md`](state/STATE-BACKEND.md):
 
 ```bash
 B=$(terraform output -raw state_bucket_name)   # myapp-tfstate-<account-id>
