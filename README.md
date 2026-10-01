@@ -74,6 +74,17 @@ Three things to hold onto while you build:
 
 ---
 
+## Start here
+
+**New AWS account?** Read [`bootstrap/README.md`](bootstrap/README.md) first — it is the
+ordered setup sequence (root MFA → auth method → admin user → credentials → budget alarm →
+apply step 0), and it explains why each step sits where it does.
+
+**Existing account with working credentials?** Go straight to
+[`bootstrap/state/`](bootstrap/state/) and run the step 0 apply.
+
+---
+
 ## Prerequisites
 
 - AWS account with an existing IAM user/role able to create VPC, EKS, IAM, and S3 resources
