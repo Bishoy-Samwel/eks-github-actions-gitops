@@ -48,7 +48,7 @@ theoretical one.
 
 ## 3 — Create the admin user
 
-IAM → Users → Create user → name `terraform-admin`.
+IAM → Users → Create user → name it `admin` (or anything; the name is only for humans).
 
 Attach `AdministratorAccess` for now. When the CI roles from Phase 1 exist, replace it with
 a policy scoped to the specific resources Terraform touches: S3 state, DynamoDB lock, KMS,
@@ -66,15 +66,39 @@ no instance profile involved anywhere.
 
 ## 4 — Credentials on your machine
 
-Create an access key for `terraform-admin`, then write it to a **named profile**:
+Two paths. Prefer the first.
+
+**Option A — console credentials (recommended).** If the user was created with **console
+access** and AWS CLI >= 2.32.0, there is no access key to store at all:
 
 ```bash
-aws configure --profile myapp
-# AWS Access Key ID [none]: AKIA...
-# AWS Secret Access Key [none]: ...
-# Default region [eu-central-1]: eu-central-1
-# Default output format [json]: json
+aws login --profile myapp     # browser flow, valid up to 12h, auto-refreshes
+aws sts get-caller-identity --profile myapp
+```
 
+Requires the `SignInLocalDevelopmentAccess` managed policy on the user. Check your version
+with `aws --version`.
+
+**Option B — access keys.** Create a key in the IAM console, download the CSV, then:
+
+```bash
+./bootstrap/scripts/setup-aws-profile.sh --csv ~/Downloads/accessKeys.csv --profile myapp
+```
+
+The script writes the profile without printing the secret or putting it in your shell
+history. Which file gets written, how to verify, and how to rotate: [`CREDENTIALS.md`](CREDENTIALS.md).
+
+To do it by hand instead:
+
+```bash
+aws configure set aws_access_key_id     "AKIA..." --profile myapp
+aws configure set aws_secret_access_key "..."     --profile myapp
+aws configure set region eu-central-1             --profile myapp
+```
+
+Either way, export the profile:
+
+```bash
 export AWS_PROFILE=myapp
 ```
 
@@ -82,14 +106,12 @@ Named profile, not `[default]`, for two reasons: the existing `[default]` keys i
 environment were already rejected by STS, and if they ever do work you would have no way
 to run account-admin commands separately.
 
-Never commit this file. It lives outside the repo, and `.gitignore` blocks `*.tfvars` and
-`.env` as a backstop.
+Never commit these keys. They live outside the repo, and `.gitignore` blocks `*.tfvars` and
+`.env` as a backstop. Delete the downloaded CSV once the profile is written — a plaintext
+secret in a downloads folder is the most common way these leak.
 
-Prefer short-lived credentials? If you took the SSO route in step 2:
-
-```bash
-aws sso login --profile myapp     # refreshes to ~8 hours, then just re-run
-```
+The user also needs `AdministratorAccess` attached (step 3), or `terraform apply` fails at
+the first resource with `AccessDenied`.
 
 ---
 
@@ -173,7 +195,9 @@ Step 1 before everything: it is the only step that cannot be recovered from.
 - [ ] Region chosen and consistent
 - [ ] Auth method chosen (SSO or IAM user)
 - [ ] `terraform-admin` user created
+- [ ] `AdministratorAccess` actually attached (verified with a real API call)
 - [ ] Named profile configured, `AWS_PROFILE` exported
+- [ ] Downloaded access-keys CSV deleted
 - [ ] Cost Explorer enabled
 - [ ] $50 monthly budget alarm with 80% / 100% notifications
 - [ ] Free tier terms checked for this region
