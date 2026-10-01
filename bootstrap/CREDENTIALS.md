@@ -6,6 +6,16 @@ The script is [`scripts/setup-aws-profile.sh`](scripts/setup-aws-profile.sh).
 
 ---
 
+## Contents
+
+- [Usage](#usage) · [What it does](#what-it-does) · [Which file gets what](#which-file-gets-what)
+- [Verifying](#verifying) · [AWS_PROFILE not set](#the-most-common-failure-aws_profile-not-set)
+- [Terraform ignores the profile's region](#terraform-ignores-the-profiles-region)
+- [Required permissions](#required-permissions) · [Deleting and rotating](#deleting-and-rotating)
+- [Why not `aws login`](#why-not-aws-login-instead)
+
+---
+
 ## The problem it solves
 
 AWS shows an access key pair exactly once, then offers it as a CSV download. The obvious
@@ -116,6 +126,96 @@ this; a manual paste does not.
 
 ---
 
+## The most common failure: `AWS_PROFILE` not set
+
+The profile being correct in `~/.aws/credentials` does not mean it is the profile in use.
+Both the `aws` CLI and Terraform's AWS provider resolve identity in this order:
+
+1. Environment variables — `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`
+2. `AWS_PROFILE` → the matching profile in the shared config files
+3. `~/.aws/credentials` → `[default]`
+
+**Step 3 is the trap.** With `AWS_PROFILE` unset, everything falls back to `[default]`.
+If `[default]` holds stale keys, the failure looks like bad credentials when in fact the
+good ones were simply never selected:
+
+```bash
+$ terraform plan
+│ Error: Retrieving AWS account details: validating provider credentials:
+│   retrieving caller identity from STS: ... StatusCode: 403
+│   api error InvalidClientTokenId: The security token included in the request is invalid.
+```
+
+Diagnose it in one command — compare what resolves by default against the named profile:
+
+```bash
+echo "AWS_PROFILE=${AWS_PROFILE:-<unset>}"
+aws configure list | grep -E 'profile|access_key'
+aws sts get-caller-identity --profile myapp
+```
+
+If the second shows a key ending in something other than the last 4 of your `myapp` key,
+you are on the wrong profile. If the third succeeds while Terraform fails, that is the
+diagnosis.
+
+The fix, either per-command or for the session:
+
+```bash
+export AWS_PROFILE=myapp          # this shell
+AWS_PROFILE=myapp terraform plan  # one command
+```
+
+Make it permanent — environment variables do not survive a new terminal:
+
+```bash
+echo 'export AWS_PROFILE=myapp' >> ~/.bashrc
+source ~/.bashrc
+```
+
+Verify it is picked up automatically:
+
+```bash
+aws configure list    # profile column should read myapp, not "<not set>"
+```
+
+---
+
+## Terraform ignores the profile's region
+
+`providers.tf` sets `region = var.region` explicitly, so `aws configure`'s region setting
+has no effect on Terraform. The two can disagree without any error:
+
+| Source | Region |
+| --- | --- |
+| `~/.aws/config` `[profile myapp]` | `eu-central-1` |
+| `bootstrap/state/variables.tf` `var.region` default | `eu-west-1` |
+
+Terraform uses the **variable**. The state bucket gets created in `eu-west-1` regardless of
+what the profile says, and the plan output is the only place it shows up:
+
+```
+Changes to Outputs:
+  + region = "eu-west-1"
+```
+
+Check which region Terraform will actually use before applying:
+
+```bash
+terraform console <<< 'var.region'
+```
+
+If they should match, change the default in `bootstrap/state/variables.tf`, or override per
+run:
+
+```bash
+terraform plan -var region=eu-central-1
+```
+
+Regional resources are hard to move afterwards — VPCs and state buckets in particular —
+so this is worth settling before the first apply, not after.
+
+---
+
 ## Then delete the CSV
 
 ```bash
@@ -171,16 +271,9 @@ aws s3api delete-bucket --profile myapp \
 export AWS_PROFILE=myapp
 ```
 
-One env var per shell, and it is the step people forget. Both the `aws` CLI and Terraform's
-AWS provider check it and load the matching profile. Without it both fall back to
-`[default]`, whose keys STS rejects — which surfaces as a confusing failure in `terraform`
-rather than an obvious one in `aws`.
-
-To make it stick:
-
-```bash
-echo 'export AWS_PROFILE=myapp' >> ~/.bashrc
-```
+One env var per shell, and it is the step people forget. See
+[the section above](#the-most-common-failure-aws_profile-not-set) for the diagnosis and the
+permanent fix.
 
 ---
 

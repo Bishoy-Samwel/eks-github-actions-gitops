@@ -202,6 +202,7 @@ Step 1 before everything: it is the only step that cannot be recovered from.
 - [ ] $50 monthly budget alarm with 80% / 100% notifications
 - [ ] Free tier terms checked for this region
 - [ ] `aws sts get-caller-identity` returns an account
+- [ ] `AWS_PROFILE` exported in `.bashrc` — unset, Terraform silently falls back to `[default]`
 - [ ] `terraform apply` in `bootstrap/state` succeeds
 - [ ] State migrated to S3 (`terraform state list` still shows resources)
 
