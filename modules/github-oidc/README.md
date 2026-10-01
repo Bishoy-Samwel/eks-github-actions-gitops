@@ -3,6 +3,10 @@
 The GitHub Actions trust boundary for this account. It creates the GitHub OIDC identity
 provider and the four IAM roles that workflows assume instead of long-lived access keys.
 
+For the reasoning behind the design — the claims AWS checks, the `sub` model, the
+immutable-ID trap, and why there are four roles — see [`OIDC-TRUST.md`](OIDC-TRUST.md).
+This file is the reference: inputs, outputs, and usage.
+
 ```hcl
 module "github_oidc" {
   source = "../../../modules/github-oidc"

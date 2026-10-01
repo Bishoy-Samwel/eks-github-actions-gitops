@@ -104,6 +104,10 @@ Three notes worth internalising:
 This is the security foundation of the entire CI design. Write it as its own module —
 it is reused by every workflow, and it is the thing most likely to be got wrong.
 
+> Deep dive: [`modules/github-oidc/OIDC-TRUST.md`](../modules/github-oidc/OIDC-TRUST.md) —
+> the claims AWS checks, the `sub` model, and the immutable-ID trap that makes a correct-looking
+> policy fail.
+
 ```hcl
 # modules/github-oidc/main.tf
 variable "repo" { type = string }   # "ORG/REPO"
