@@ -1,7 +1,7 @@
 variable "region" {
   description = "AWS region hosting the state bucket and lock table. Must match every environment."
   type        = string
-  default     = "eu-west-1"
+  default     = "eu-central-1"
 }
 
 variable "bucket_name" {

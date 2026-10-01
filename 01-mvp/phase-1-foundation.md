@@ -33,7 +33,7 @@ terraform {
   backend "s3" {
     bucket       = "myapp-tfstate"
     key          = "bootstrap/terraform.tfstate"
-    region       = "eu-west-1"
+    region       = "eu-central-1"
     dynamodb_table = "myapp-tflock"
     encrypt      = true
   }
@@ -231,7 +231,7 @@ resource "aws_vpc" "main" {
 
 # Public subnets — NAT GW, and later the load balancer
 resource "aws_subnet" "public" {
-  for_each = local.azs   # ["eu-west-1a", "eu-west-1b"]
+  for_each = local.azs   # ["eu-central-1a", "eu-central-1b"]
   vpc_id            = aws_vpc.main.id
   availability_zone = each.value
   cidr_block        = cidrsubnet("10.0.0.0/16", 4, index(local.azs, each.value))
@@ -258,7 +258,7 @@ resource "aws_nat_gateway" "main" {
 # Gateway endpoints — free, and they keep ECR/state traffic off NAT
 resource "aws_vpc_endpoint" "s3" {
   vpc_id            = aws_vpc.main.id
-  service_name      = "com.amazonaws.eu-west-1.s3"
+  service_name      = "com.amazonaws.eu-central-1.s3"
   vpc_endpoint_type = "Gateway"
   route_table_ids   = concat([for s in aws_subnet.public : s.id],
                               [for s in aws_subnet.private : s.id])
@@ -266,7 +266,7 @@ resource "aws_vpc_endpoint" "s3" {
 
 resource "aws_vpc_endpoint" "dynamodb" {
   vpc_id            = aws_vpc.main.id
-  service_name      = "com.amazonaws.eu-west-1.dynamodb"
+  service_name      = "com.amazonaws.eu-central-1.dynamodb"
   vpc_endpoint_type = "Gateway"
   route_table_ids   = concat([for s in aws_subnet.public : s.id],
                               [for s in aws_subnet.private : s.id])

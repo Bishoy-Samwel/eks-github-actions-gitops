@@ -102,7 +102,7 @@ spec:
     - namePattern: "myapp"     # glob, or use labels
       images:
         - alias: myapp
-          imageName: <acct>.dkr.ecr.eu-west-1.amazonaws.com/myapp
+          imageName: <acct>.dkr.ecr.eu-central-1.amazonaws.com/myapp
           commonUpdateSettings:
             updateStrategy: semver        # NOT "newest-build" — see below
             allowTags: "regexp:^v?[0-9]+\.[0-9]+\.[0-9]+$"
@@ -164,7 +164,7 @@ spec:
       restartPolicy: Never
       containers:
         - name: migrate
-          image: <acct>.dkr.ecr.eu-west-1.amazonaws.com/myapp:{{`{{ .Image.Version }}`}}
+          image: <acct>.dkr.ecr.eu-central-1.amazonaws.com/myapp:{{`{{ .Image.Version }}`}}
           command: ["npm", "run", "migrate"]
           envFrom:
             - secretRef: { name: myapp-secrets }   # projected by ESO
@@ -248,7 +248,7 @@ spec:
           whenUnsatisfiable: DoNotSchedule
       containers:
         - name: app
-          image: <acct>.dkr.ecr.eu-west-1.amazonaws.com/myapp:v1.0.0
+          image: <acct>.dkr.ecr.eu-central-1.amazonaws.com/myapp:v1.0.0
           imagePullPolicy: IfNotPresent
           ports: [{ containerPort: 3000 }]
           # THREE probes, three different jobs. Conflating them is the classic outage.
@@ -601,7 +601,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: aws-actions/configure-aws-credentials@v4
-        with: { role-to-assume: <infra-plan role>, aws-region: eu-west-1 }
+        with: { role-to-assume: <infra-plan role>, aws-region: eu-central-1 }
       - run: terraform init && terraform plan -detailed-exitcode
         working-directory: infra/envs/prod
         # exit 2 = changes present. Fail the run so someone looks.

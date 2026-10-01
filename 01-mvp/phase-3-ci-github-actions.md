@@ -121,7 +121,7 @@ jobs:
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::ACCT:role/myapp-ci-ecr-push
-          aws-region: eu-west-1
+          aws-region: eu-central-1
           # no aws-access-key-id. none. ever.
 
       - uses: aws-actions/amazon-ecr-login@v2
@@ -131,7 +131,7 @@ jobs:
       - id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ACCT.dkr.ecr.eu-west-1.amazonaws.com/myapp
+          images: ACCT.dkr.ecr.eu-central-1.amazonaws.com/myapp
           tags: |
             type=sha,format=long
             type=semver,pattern={{version}}
@@ -206,7 +206,7 @@ jobs:
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::ACCT:role/myapp-infra-plan   # READ-ONLY
-          aws-region: eu-west-1
+          aws-region: eu-central-1
 
       - uses: hashicorp/setup-terraform@v3
         with:
@@ -258,7 +258,7 @@ jobs:
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::ACCT:role/myapp-infra-apply   # SEPARATE write role
-          aws-region: eu-west-1
+          aws-region: eu-central-1
       - uses: hashicorp/setup-terraform@v3
         with: { terraform_wrapper: false }
       - uses: actions/cache@v4

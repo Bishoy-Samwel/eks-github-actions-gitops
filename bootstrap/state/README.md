@@ -100,10 +100,10 @@ environment name — the key must differ per environment or they will share stat
 backend "s3" {
   bucket         = "myapp-tfstate"
   key            = "dev/terraform.tfstate"
-  region         = "eu-west-1"
+  region         = "eu-central-1"
   dynamodb_table = "myapp-tflock"
   encrypt        = true
-  kms_key_id     = "arn:aws:kms:eu-west-1:ACCT:key/REPLACE_ME"
+  kms_key_id     = "arn:aws:kms:eu-central-1:ACCT:key/REPLACE_ME"
 }
 ```
 

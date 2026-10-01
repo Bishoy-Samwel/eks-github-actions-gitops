@@ -183,36 +183,39 @@ aws configure list    # profile column should read myapp, not "<not set>"
 ## Terraform ignores the profile's region
 
 `providers.tf` sets `region = var.region` explicitly, so `aws configure`'s region setting
-has no effect on Terraform. The two can disagree without any error:
+has **no effect** on Terraform. The profile's region and the variable's value are two
+independent settings that can disagree without producing any error.
+
+They currently agree:
 
 | Source | Region |
 | --- | --- |
 | `~/.aws/config` `[profile myapp]` | `eu-central-1` |
-| `bootstrap/state/variables.tf` `var.region` default | `eu-west-1` |
+| `bootstrap/state/variables.tf` `var.region` default | `eu-central-1` |
 
-Terraform uses the **variable**. The state bucket gets created in `eu-west-1` regardless of
-what the profile says, and the plan output is the only place it shows up:
+But if you ever change one, remember Terraform uses the **variable**. The plan output is
+the only place that shows it:
 
 ```
 Changes to Outputs:
-  + region = "eu-west-1"
+  + region = "eu-central-1"
 ```
 
-Check which region Terraform will actually use before applying:
+Check which region Terraform will actually use:
 
 ```bash
 terraform console <<< 'var.region'
 ```
 
-If they should match, change the default in `bootstrap/state/variables.tf`, or override per
-run:
+Override per run without editing the file:
 
 ```bash
 terraform plan -var region=eu-central-1
 ```
 
-Regional resources are hard to move afterwards — VPCs and state buckets in particular —
-so this is worth settling before the first apply, not after.
+Regional resources are hard to move afterwards — VPCs and state buckets in particular. If
+the profile says one region and the variable another, settle it before the first apply, not
+after.
 
 ---
 
