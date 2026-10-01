@@ -1,0 +1,26 @@
+# Terraform
+*.tfstate
+*.tfstate.*
+.terraform/
+*.tfplan
+tfplan
+plan.txt
+crash.log
+
+# Variables that must never be committed — state holds secrets in plaintext
+*.tfvars
+*.tfvars.json
+!example.tfvars
+
+# Node
+node_modules/
+npm-debug.log*
+.env
+.env.*
+!.env.example
+
+# Editors / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp

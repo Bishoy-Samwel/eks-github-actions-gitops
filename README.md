@@ -1,7 +1,7 @@
 # GitOps Pipeline on AWS — Implementation Levels
 
-Working implementation of the architecture described in
-[`../architecture-review-github-actions.md`](../architecture-review-github-actions.md).
+Working implementation of a GitOps pipeline on AWS, built in three levels. Each level is a
+self-contained stage: prove the loop, harden it, then scale it on triggers.
 
 **Stack:** Terraform · Amazon EKS · GitHub Actions (CI) · Argo CD + Argo CD Image Updater (CD)
 · External Secrets Operator · Helm · Node.js + MySQL + Redis
