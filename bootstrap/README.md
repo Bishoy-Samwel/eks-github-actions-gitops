@@ -160,19 +160,26 @@ everything downstream fails with the same error, so this is the gate.
 
 ```bash
 cd bootstrap/state
-terraform init
-terraform apply                # bucket + KMS key + lock table
-terraform init -migrate-state # move local state into the bucket
+export AWS_PROFILE=myapp
+
+terraform init -backend=false   # the bucket does not exist yet, so no backend
+terraform apply                 # bucket + KMS key + lock table
+terraform init -migrate-state   # move local state into the bucket
 terraform state list
 ```
 
 Then verify — the full list is in [`bootstrap/state/README.md`](state/README.md):
 
 ```bash
-aws s3api get-public-access-block --bucket myapp-tfstate
-aws s3api get-bucket-versioning   --bucket myapp-tfstate
+B=$(terraform output -raw state_bucket_name)   # myapp-tfstate-<account-id>
+aws s3api get-public-access-block --bucket "$B"
+aws s3api get-bucket-versioning   --bucket "$B"
 aws dynamodb describe-table       --table-name myapp-tflock
 ```
+
+The bucket name ends in your account ID. A fixed name like `myapp-tfstate` is owned by
+someone else and fails the first apply with `409 BucketAlreadyExists` — accounts are unique,
+so putting the account ID in the name is what makes the default safe.
 
 ---
 

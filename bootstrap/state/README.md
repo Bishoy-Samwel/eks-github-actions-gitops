@@ -16,58 +16,98 @@ config after it uses remote state from the first apply onward.
 
 ## Run it
 
+`backend.tf` is committed, so this directory already points at remote state — but on a
+brand new account the bucket it names does not exist yet. The first run therefore starts
+with `-backend=false`, which initializes with local state and no backend:
+
 ```bash
 cd bootstrap/state
+export AWS_PROFILE=myapp
 
-# 1. First apply. Local state — this is the ONLY apply that uses local state.
-terraform init
+# 1. Init with NO backend. This is the ONLY step that uses local state.
+terraform init -backend=false
+
+# 2. Apply. Creates the bucket, KMS key, and lock table.
 terraform apply
 
-# 2. Migrate to the bucket. Terraform moves the local state file across on init.
+# 3. Init again, this time with the backend. Terraform copies local state into the bucket.
 terraform init -migrate-state
 
-# 3. Confirm it actually migrated.
+# 4. Confirm it migrated and that nothing drifted.
 terraform state list
+terraform plan            # "No changes"
 ```
 
-Step 2 is where the bucket starts being used. Before it, state is on your laptop.
+Step 3 is where the bucket starts being used. Before it, state is on your laptop — which
+means the plaintext secrets it holds are too. Delete the local files once migrated:
+
+```bash
+rm -f terraform.tfstate terraform.tfstate.backup terraform.tfstate.*.backup
+```
+
+They are gitignored, so they cannot be committed, but they still sit on disk in the clear.
 
 ### If the bucket name is taken
 
-S3 bucket names are global, so `myapp-tfstate` may already exist in someone else's
-account. Override it:
+The default is `myapp-tfstate-<account-id>`, and account IDs are globally unique, so the
+default should not collide. If you overrode it and hit `BucketAlreadyExists`, pick another:
 
 ```bash
-terraform apply -var 'bucket_name=myapp-tfstate-BISH'
+terraform apply -var 'bucket_name=myapp-tfstate-042617239394-2'
 ```
 
-Or set it in `terraform.tfvars` (gitignored) so you do not have to remember the flag.
-If you do, pick a name that carries your identity — you will be typing it in backend
-blocks across several environments.
+> This is the failure that a fixed default produces. `myapp-tfstate` on its own is already
+> owned by someone else, and S3 names are global — so the very first apply fails with
+> `409 BucketAlreadyExists`. The account-ID suffix exists to make that impossible.
+
+If you do override `bucket_name`, remember to update `backend.tf` to match: a backend block
+cannot read variables, so the two are not linked.
 
 ## Verify
 
+Set the name once — the bucket is account-specific:
+
 ```bash
-# Public access is actually blocked
-aws s3api get-public-access-block --bucket myapp-tfstate
-
-# Versioning is on — this is your recovery path
-aws s3api get-bucket-versioning --bucket myapp-tfstate
-
-# Encryption is KMS, not just SSE-S3
-aws s3api get-bucket-encryption --bucket myapp-tfstate
-
-# Lock table exists and is server-side encrypted
-aws dynamodb describe-table --table-name myapp-tflock \
-  --query 'Table.{Billing:BillingModeSummary.BillingMode,Encrypted:SSEDescription.Status}'
-
-# The bucket refuses to be deleted
-terraform destroy
-# -> Error: Resource aws_s3_bucket.state has lifecycle.prevent_destroy set
+B=$(terraform output -raw state_bucket_name)
+echo "$B"
 ```
 
-Check the destroy attempt. It is the only way to confirm `prevent_destroy` is actually
-in effect rather than merely present in the file.
+```bash
+# Public access is actually blocked
+aws s3api get-public-access-block --bucket "$B"
+
+# Versioning is on — this is your recovery path
+aws s3api get-bucket-versioning --bucket "$B"
+
+# Encryption is KMS with a customer-managed key, not SSE-S3
+aws s3api get-bucket-encryption --bucket "$B"
+
+# Lock table exists
+aws dynamodb describe-table --table-name myapp-tflock \
+  --query 'Table.{Billing:BillingModeSummary.BillingMode,Status:TableStatus}'
+```
+
+Expected output, and what each proves:
+
+| Command | Expected | Proves |
+| --- | --- | --- |
+| `get-public-access-block` | all four `true` | no accidental public exposure |
+| `get-bucket-versioning` | `Enabled` | a bad apply is recoverable |
+| `get-bucket-encryption` | `aws:kms` + a key ARN | encryption uses your CMK, so decrypts are attributable in CloudTrail |
+| `describe-table` | `PAY_PER_REQUEST`, `ACTIVE` | locking works, no provisioned capacity to under-size |
+
+Not covered by the above: an empty-region or wrong-region deploy. Confirm the region the
+resources landed in:
+
+```bash
+aws s3api get-bucket-location --bucket "$B"
+aws dynamodb describe-table --table-name myapp-tflock \
+  --query 'Table.TableArn' --output text
+```
+
+That second one matters. A table created before the region default was settled landed in
+the wrong region, and Terraform did not notice — it tracked the table by name, and the name
+looked the same. Only the ARN reveals the region.
 
 ## What this does not protect against
 
@@ -98,12 +138,12 @@ environment name — the key must differ per environment or they will share stat
 
 ```hcl
 backend "s3" {
-  bucket         = "myapp-tfstate"
+  bucket         = "myapp-tfstate-042617239394"
   key            = "dev/terraform.tfstate"
   region         = "eu-central-1"
   dynamodb_table = "myapp-tflock"
   encrypt        = true
-  kms_key_id     = "arn:aws:kms:eu-central-1:ACCT:key/REPLACE_ME"
+  kms_key_id     = "arn:aws:kms:eu-central-1:042617239394:key/9c2a2d41-5b14-4968-8862-339509379ec8"
 }
 ```
 

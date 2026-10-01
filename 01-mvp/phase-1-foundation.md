@@ -28,36 +28,44 @@ It is not optional and it is not the thing you add at the end. Every subsequent 
 depends on it.
 
 ```hcl
-# bootstrap/state/main.tf
+# bootstrap/state/backend.tf — concrete values only; a backend block cannot read variables
 terraform {
   backend "s3" {
-    bucket       = "myapp-tfstate"
-    key          = "bootstrap/terraform.tfstate"
-    region       = "eu-central-1"
+    bucket         = "myapp-tfstate-042617239394"
+    key            = "bootstrap/terraform.tfstate"
+    region         = "eu-central-1"
     dynamodb_table = "myapp-tflock"
-    encrypt      = true
+    encrypt        = true
+    kms_key_id     = "arn:aws:kms:eu-central-1:042617239394:key/..."
   }
 }
 
-resource "aws_s3_bucket" "tfstate" {
-  bucket        = "myapp-tfstate"
+# bootstrap/state/main.tf — the bucket name is derived, so it cannot collide
+data "aws_caller_identity" "current" {}
+
+locals {
+  bucket_name = "${local.name_prefix}-tfstate-${data.aws_caller_identity.current.account_id}"
+}
+
+resource "aws_s3_bucket" "state" {
+  bucket        = local.bucket_name
   lifecycle { prevent_destroy = true }   # deleting this destroys everything it tracks
 }
 
-resource "aws_s3_bucket_versioning" "tfstate" {
-  bucket = aws_s3_bucket.tfstate.id
+resource "aws_s3_bucket_versioning" "state" {
+  bucket = aws_s3_bucket.state.id
   versioning_configuration { status = "Enabled" }
 }
 
-resource "aws_s3_bucket_public_access_block" "tfstate" {
-  bucket                  = aws_s3_bucket.tfstate.id
+resource "aws_s3_bucket_public_access_block" "state" {
+  bucket                  = aws_s3_bucket.state.id
   block_public_acls       = true
   block_public_policy     = true
   ignore_public_acls      = true
   restrict_public_buckets = true
 }
 
-resource "aws_dynamodb_table" "tflock" {
+resource "aws_dynamodb_table" "locks" {
   name         = "myapp-tflock"
   billing_mode = "PAY_PER_REQUEST"
   hash_key     = "LockID"
@@ -68,19 +76,25 @@ Apply this **twice by hand** before wiring it to anything:
 
 ```bash
 cd bootstrap/state
-terraform init && terraform apply -auto-approve   # first: creates the bucket
-terraform init                                     # second: now the backend can attach
+export AWS_PROFILE=myapp
+
+terraform init -backend=false     # first: no backend, because the bucket does not exist yet
+terraform apply                   # creates the bucket, KMS key, and lock table
+terraform init -migrate-state     # second: now the backend can attach
+terraform plan                    # "No changes"
 ```
 
 The two-step is not optional. Terraform cannot write state to a bucket that does not exist
 yet, so the first apply runs with local state and the second picks up the remote backend.
+Delete the local `terraform.tfstate*` files afterwards — they hold the same plaintext secrets.
 
 Three notes worth internalising:
 
+- **The bucket name ends in the account ID.** A fixed name like `myapp-tfstate` is already
+  owned by another account and the first apply fails with `409 BucketAlreadyExists` — S3
+  names are global. The suffix makes the default collision-proof.
 - **`prevent_destroy` on the state bucket.** Without it, one `terraform destroy` destroys
   every resource you own.
-- **Versioning is what makes mistakes recoverable.** A bad apply is one `aws s3api
-  list-object-versions` away from fixed. Without it, a corrupted apply is unrecoverable.
 - **State contains secrets in plaintext.** You will confirm this in verification step 2.
 
 ---
@@ -465,7 +479,7 @@ kubectl get nodes -o wide
 
 # 2. State is clean and you know what it exposes
 cd infra/envs/dev && terraform plan      # "No changes"
-aws s3api get-bucket-versioning --bucket myapp-tfstate
+aws s3api get-bucket-versioning --bucket myapp-tfstate-042617239394
 terraform state pull | grep -i password
 #    -> this prints your DB password in plaintext. That is why the bucket needs
 #       versioning + block_public_access + SSE-KMS, and why you never commit state.

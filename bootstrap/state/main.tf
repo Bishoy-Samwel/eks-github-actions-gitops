@@ -8,8 +8,14 @@
 // contains every resource attribute, including secrets in plaintext, so its bucket is
 // treated as a credential store rather than as scratch space.
 
+// The account ID is what makes the default bucket name safe. Without it, a fixed name
+// like "myapp-tfstate" is already owned by someone else and every apply fails with
+// BucketAlreadyExists.
+data "aws_caller_identity" "current" {}
+
 locals {
   name_prefix = "myapp"
+  bucket_name = var.bucket_name != "" ? var.bucket_name : "${local.name_prefix}-tfstate-${data.aws_caller_identity.current.account_id}"
 }
 
 // ─── KMS key ────────────────────────────────────────────────────────────────────
@@ -36,7 +42,7 @@ resource "aws_kms_alias" "state" {
 // ─── State bucket ───────────────────────────────────────────────────────────────
 
 resource "aws_s3_bucket" "state" {
-  bucket = var.bucket_name
+  bucket = local.bucket_name
 
   // Without this, a single `terraform destroy` in any other config that shares this
   // backend removes the state for everything. Terraform will refuse instead.

@@ -6,14 +6,18 @@ variable "region" {
 
 variable "bucket_name" {
   description = <<-EOT
-    Globally unique S3 bucket name for Terraform state.
-    S3 bucket names are global, so this must be unique across all AWS accounts.
+    S3 bucket name for Terraform state. S3 names are global, so this must be unique
+    across every AWS account.
+
+    Leave empty to use "myapp-tfstate-<account-id>". The account ID is globally unique,
+    so the default cannot collide — unlike a fixed name like "myapp-tfstate", which
+    someone else already owns.
   EOT
   type        = string
-  default     = "myapp-tfstate"
+  default     = ""
 
   validation {
-    condition     = can(regex("^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$", var.bucket_name))
+    condition     = var.bucket_name == "" || can(regex("^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$", var.bucket_name))
     error_message = "Bucket name must be 3-63 lowercase characters, and must not look like an IP address."
   }
 }
