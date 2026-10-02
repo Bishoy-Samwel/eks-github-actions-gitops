@@ -27,3 +27,23 @@ output "state_bucket_name" {
   description = "State bucket this environment reads from and writes to."
   value       = local.state_bucket_name
 }
+
+output "vpc_id" {
+  description = "VPC created for this environment."
+  value       = module.vpc.vpc_id
+}
+
+output "public_subnet_ids" {
+  description = "Public subnets: NAT gateway and load balancers."
+  value       = module.vpc.public_subnet_ids
+}
+
+output "private_subnet_ids" {
+  description = "Private subnets: EKS control plane, nodes, and pods."
+  value       = module.vpc.private_subnet_ids
+}
+
+output "cluster_name" {
+  description = "EKS cluster name these subnets are tagged for."
+  value       = local.cluster_name
+}

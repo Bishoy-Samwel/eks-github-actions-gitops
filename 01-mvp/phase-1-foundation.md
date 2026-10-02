@@ -271,7 +271,10 @@ resource "aws_subnet" "private" {
   for_each = local.azs
   vpc_id            = aws_vpc.main.id
   availability_zone = each.value
-  cidr_block        = cidrsubnet("10.0.0.0/16", 8, index(local.azs, each.value))
+  # Offset by 8 so private subnets live in the upper half of the /16. Using the same netnum
+  # as public would nest this inside the public subnet, and AWS rejects overlapping subnets
+  # in one VPC — the apply fails with "CIDR block overlaps".
+  cidr_block        = cidrsubnet("10.0.0.0/16", 4, index(local.azs, each.value) + 8)
 
   tags = { Name = "private-${each.key}", Tier = "private" }
 }
@@ -303,6 +306,18 @@ resource "aws_vpc_endpoint" "dynamodb" {
 The gateway endpoints cost nothing and remove the S3/DynamoDB path from your NAT bill
 entirely. Include them from the start — retrofitting them later means touching every route
 table again.
+
+### The CIDR split
+
+| Range | Subnets | Use |
+| --- | --- | --- |
+| `10.0.0.0/20`, `10.0.16.0/20` | netnum 0–1 | public: NAT gateway, load balancer |
+| `10.0.128.0/20`, `10.0.144.0/20` | netnum 8–9 | private: EKS nodes, pods, RDS |
+
+Public takes the lower half and private the upper half. Both are `/20`: a `/24` private
+subnet looks tidy but runs out of addresses once the VPC CNI starts handing IPs to pods.
+
+The implementation lives in [`modules/vpc`](../modules/vpc/README.md).
 
 ### Security groups
 

@@ -9,6 +9,22 @@ locals {
 
   // Same derivation as bootstrap/state, so the bucket name cannot drift between the two.
   state_bucket_name = var.state_bucket_name != "" ? var.state_bucket_name : "${var.name_prefix}-tfstate-${data.aws_caller_identity.current.account_id}"
+
+  cluster_name = "${var.name_prefix}-dev"
+}
+
+// ─── Step 2: VPC ─────────────────────────────────────────────────────────────────
+//
+// Networking only. The EKS module (step 3) creates the cluster and its security groups in
+// these subnets. cluster_name is passed so the subnets carry the tag EKS discovers them by.
+
+module "vpc" {
+  source = "../../../modules/vpc"
+
+  name_prefix  = var.name_prefix
+  cluster_name = local.cluster_name
+
+  tags = local.tags
 }
 
 // ─── Step 1: GitHub OIDC identity ───────────────────────────────────────────────
