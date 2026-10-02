@@ -155,6 +155,32 @@ Then `terraform init` in that environment. Terraform prompts to copy the existin
 state if there is any; there should not be, since this is a fresh environment. Answer
 `no` if it asks.
 
+## Rebuilding after a teardown
+
+If this backend has been destroyed to stop all billing, recreate it before touching any
+environment — nothing else can initialise while the bucket is missing.
+
+```bash
+cd bootstrap/state
+terraform init -backend=false
+terraform apply
+terraform init
+```
+
+Three things will not come back the way they were:
+
+| Resource | What happens on rebuild |
+| --- | --- |
+| S3 bucket | New name, because the old one is globally unique and AWS holds it briefly after deletion. Update `bucket` here and in each `backend.tf` |
+| KMS key | New key id, and the old key's 30-day deletion window means its alias ARN stays dead. Re-point anything that referenced it |
+| DynamoDB table | Same name works, because table names are not globally unique |
+
+`terraform apply` prints the new bucket name, key ARN, and table name — take those from
+the outputs rather than editing the values by hand.
+
+Before any future `terraform destroy`, remove `prevent_destroy` from the bucket. It is the
+last line of defence for every environment's state that shares this backend.
+
 ## Cost
 
 | Item | Monthly |
